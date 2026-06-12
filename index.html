@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Excel General Search Tool</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Inter:wght@400;500;600&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1117; --surface: #181c26; --surface2: #1e2333;
+    --border: #2a2f42; --accent: #4f8ef7; --accent-dim: rgba(79,142,247,0.12);
+    --green: #3ecf8e; --green-dim: rgba(62,207,142,0.12);
+    --red: #f76f6f; --red-dim: rgba(247,111,111,0.12);
+    --yellow: #f7c94f; --purple: #b07ef7; --purple-dim: rgba(176,126,247,0.12);
+    --text: #e8eaf0; --muted: #7a7f99;
+    --mono: 'IBM Plex Mono', monospace; --sans: 'Inter', sans-serif;
+  }
+  body { background:var(--bg); color:var(--text); font-family:var(--sans); min-height:100vh; display:flex; flex-direction:column; }
+
+  /* HEADER */
+  header { border-bottom:1px solid var(--border); padding:14px 28px; display:flex; align-items:center; gap:14px; }
+  .logo-mark { width:30px;height:30px;background:var(--accent);border-radius:7px;display:grid;place-items:center;font-family:var(--mono);font-weight:600;font-size:13px;color:#fff;flex-shrink:0; }
+  header h1 { font-size:14px;font-weight:600;color:var(--text); }
+  header .sub { font-size:12px;color:var(--muted);margin-left:4px; }
+
+  /* MAIN LAYOUT - full width */
+  .main-container { flex:1; display:flex; flex-direction:column; height:calc(100vh - 97px); }
+  .layout { flex:1; display:grid; grid-template-columns:370px 1fr; height:100%; }
+
+  /* LEFT PANEL */
+  .left { border-right:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; overflow-x:hidden; background:var(--bg); }
+  .left::-webkit-scrollbar { width:5px; }
+  .left::-webkit-scrollbar-thumb { background:var(--border);border-radius:3px; }
+  .panel-label { font-size:10px;font-weight:600;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase;padding:14px 18px 9px;border-bottom:1px solid var(--border); flex-shrink:0; }
+
+  /* DROP ZONE */
+  .drop-zone { margin:14px;border:1.5px dashed var(--border);border-radius:10px;padding:22px 18px;text-align:center;cursor:pointer;transition:border-color 0.2s,background 0.2s;position:relative; }
+  .drop-zone:hover,.drop-zone.drag-over { border-color:var(--accent);background:var(--accent-dim); }
+  .drop-zone input[type="file"] { position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%; }
+  .drop-icon { font-size:26px;margin-bottom:6px; }
+  .drop-zone p { font-size:12px;color:var(--muted);line-height:1.5; }
+  .drop-zone strong { color:var(--accent);font-weight:600; }
+  .drop-zone .formats { font-size:11px;color:var(--muted);margin-top:5px;font-family:var(--mono); }
+
+  /* FILE LIST */
+  .file-list { padding:0 14px 10px;display:flex;flex-direction:column;gap:5px; }
+  .file-item { background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;display:flex;align-items:center;gap:7px;font-size:12px; }
+  .file-item .file-icon { font-size:15px; }
+  .file-item .file-name { flex:1;color:var(--text);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+  .file-item .file-meta { color:var(--muted);font-size:11px;white-space:nowrap; }
+  .file-item .remove-btn { background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;padding:0 2px;line-height:1;transition:color 0.15s; }
+  .file-item .remove-btn:hover { color:var(--red); }
+
+  /* SHEET SUMMARY */
+  .sheet-summary { padding:0 14px 10px;font-size:12px;color:var(--muted); }
+  .sheet-summary .tag { display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-family:var(--mono);font-size:10px;margin:2px 3px 2px 0;color:var(--text); }
+  .divider { border-top:1px solid var(--border);margin:2px 14px 10px; }
+
+  /* SEARCH INPUT AREA */
+  .search-section { flex-shrink:0; display:flex;flex-direction:column;padding:0 14px 14px; }
+  .search-section label { font-size:11px;color:var(--muted);margin-bottom:5px;display:block; }
+  .id-textarea { min-height:160px; background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px;color:var(--text);font-family:var(--mono);font-size:13px;resize:vertical;line-height:1.7;transition:border-color 0.2s;outline:none; }
+  .id-textarea:focus { border-color:var(--accent); }
+  .id-textarea::placeholder { color:var(--muted); }
+  .input-footer { display:flex;align-items:center;justify-content:space-between;margin-top:6px; }
+  .val-count { font-size:11px;color:var(--muted);font-family:var(--mono); }
+
+  /* MATCH TYPE TOGGLE */
+  .match-toggle { display:flex;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px; }
+  .match-opt { padding:3px 9px;font-size:11px;font-weight:500;border:none;background:none;color:var(--muted);border-radius:4px;cursor:pointer;transition:background 0.15s,color 0.15s; }
+  .match-opt.active { background:var(--accent);color:#fff; }
+
+  /* SEARCH BUTTON */
+  .search-btn { margin-top:10px;width:100%;padding:11px;border:none;border-radius:8px;font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;transition:opacity 0.2s,transform 0.1s;display:flex;align-items:center;justify-content:center;gap:8px; }
+  .search-btn.purple { background:var(--purple);color:#fff; }
+  .search-btn:hover:not(:disabled) { opacity:0.86; }
+  .search-btn:active:not(:disabled) { transform:scale(0.98); }
+  .search-btn:disabled { opacity:0.38;cursor:not-allowed; }
+  .spinner { width:15px;height:15px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.6s linear infinite;display:none; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* RIGHT PANEL */
+  .right { display:flex;flex-direction:column;overflow:hidden;background:var(--surface); }
+  .results-header { padding:13px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;flex-wrap:wrap;gap:8px;background:var(--surface); }
+  .results-header h2 { font-size:13px;font-weight:600;color:var(--text); }
+  .stats { display:flex;gap:14px;align-items:center; }
+  .stat { display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted); }
+  .stat .dot { width:7px;height:7px;border-radius:50%; }
+  .stat .dot.green { background:var(--green); }
+  .stat .dot.red { background:var(--red); }
+  .stat .dot.purple { background:var(--purple); }
+  .export-btn { background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:6px 13px;color:var(--text);font-size:12px;font-weight:500;cursor:pointer;transition:border-color 0.2s;display:flex;align-items:center;gap:5px; }
+  .export-btn:hover { border-color:var(--accent);color:var(--accent); }
+
+  /* TABLE */
+  .results-body { flex:1;overflow-y:auto; }
+  .results-body::-webkit-scrollbar { width:5px; }
+  .results-body::-webkit-scrollbar-thumb { background:var(--border);border-radius:3px; }
+  table { width:100%;border-collapse:collapse;font-size:13px; }
+  thead { position:sticky;top:0;background:var(--surface);z-index:2; }
+  thead th { padding:9px 14px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap; }
+  tbody tr { border-bottom:1px solid var(--border);transition:background 0.1s; }
+  tbody tr:hover { background:var(--surface2); }
+  tbody td { padding:9px 14px;vertical-align:top;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+  .val-cell { font-family:var(--mono);font-size:12px;font-weight:600;color:var(--purple); }
+  .status-badge { display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600;font-family:var(--mono);white-space:nowrap; }
+  .status-badge.found { background:var(--green-dim);color:var(--green); }
+  .status-badge.not-found { background:var(--red-dim);color:var(--red); }
+  .location-cell { font-size:11px;color:var(--muted);font-family:var(--mono); }
+  .col-badge { display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:10px;color:var(--text); }
+  .row-preview { font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+  .match-count { display:inline-block;background:rgba(247,201,79,0.15);color:var(--yellow);border-radius:4px;padding:1px 6px;font-size:10px;font-family:var(--mono);font-weight:600;margin-left:4px; }
+
+  /* HIGHLIGHT in preview */
+  .hl { background:rgba(79,142,247,0.25);color:var(--text);border-radius:2px;padding:0 2px; }
+  .hl.purple-hl { background:rgba(176,126,247,0.25); }
+
+  /* EMPTY STATE */
+  .empty-state { flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;color:var(--muted);padding:40px;text-align:center; }
+  .empty-state .big-icon { font-size:44px;margin-bottom:4px; }
+  .empty-state h3 { font-size:14px;color:var(--text);font-weight:600; }
+  .empty-state p { font-size:13px;line-height:1.6;max-width:300px; }
+
+  @media(max-width:768px){
+    .layout{grid-template-columns:1fr;grid-template-rows:auto 1fr;height:auto;}
+    .left{border-right:none;border-bottom:1px solid var(--border);}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-mark">🔎</div>
+  <h1>Excel General Search Tool <span class="sub">— Multi‑File Lookup</span></h1>
+</header>
+
+<div class="main-container">
+  <div class="layout">
+    <!-- LEFT PANEL: File Upload + Search Input -->
+    <div class="left">
+      <div class="panel-label">1 — Upload Excel Files</div>
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple />
+        <div class="drop-icon">📂</div>
+        <p><strong>Drop files here</strong> or click to browse</p>
+        <p>Multiple files supported</p>
+        <div class="formats">.xlsx · .xls · .csv</div>
+      </div>
+      <div class="file-list" id="fileList"></div>
+      <div class="sheet-summary" id="sheetSummary"></div>
+      <div class="divider"></div>
+      <div class="panel-label" style="border-bottom:none;padding-bottom:6px;">2 — Enter Values to Search</div>
+      <div class="search-section">
+        <label>One value per line — any type (ID, IMEI, ICCID, name, text…)</label>
+        <textarea class="id-textarea" id="searchInput"
+          placeholder="BSF2345678&#10;546374843656&#10;647383837844774&#10;John Smith&#10;example@domain.com"></textarea>
+        <div class="input-footer">
+          <span class="val-count" id="valueCount">0 values</span>
+          <div class="match-toggle" id="matchToggle">
+            <button class="match-opt active" data-mode="exact">Exact</button>
+            <button class="match-opt" data-mode="contains">Contains</button>
+          </div>
+        </div>
+        <button class="search-btn purple" id="searchBtn" disabled>
+          <span class="spinner" id="searchSpinner"></span>
+          <span id="searchBtnText">Search Values</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: Results Area -->
+    <div class="right" id="resultsPanel">
+      <div class="empty-state">
+        <div class="big-icon">🔎</div>
+        <h3>General Search Ready</h3>
+        <p>Upload Excel/CSV files, enter any values (one per line), choose Exact or Contains match, and click <strong>Search Values</strong>. Results appear here with highlighted matches.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  UTILITIES
+// ═══════════════════════════════════════════════════════════════════
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function shortName(name, max=22) {
+  return name.length > max ? name.slice(0, max-1)+'…' : name;
+}
+function readFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type:'array' });
+        const result = {};
+        for (const sn of wb.SheetNames) {
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:'' });
+          if (rows.length) result[sn] = rows;
+        }
+        resolve(result);
+      } catch(err) { reject(err); }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+function exportCSV(headers, rows, filename) {
+  const csv = [headers, ...rows]
+    .map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(','))
+    .join('\n');
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([csv], {type:'text/csv'})),
+    download: filename
+  });
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function parseLines(val) {
+  return val.split('\n').map(l=>l.trim()).filter(Boolean);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  FILE MANAGER (single instance for general search)
+// ═══════════════════════════════════════════════════════════════════
+let uploadedFiles = []; // { name, sheets }
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const fileListDiv = document.getElementById('fileList');
+const sheetSummaryDiv = document.getElementById('sheetSummary');
+const searchInput = document.getElementById('searchInput');
+const valueCountSpan = document.getElementById('valueCount');
+const searchBtn = document.getElementById('searchBtn');
+const searchSpinner = document.getElementById('searchSpinner');
+const searchBtnText = document.getElementById('searchBtnText');
+const resultsPanel = document.getElementById('resultsPanel');
+
+// Match mode: exact or contains
+let currentMatchMode = 'exact';
+
+// Handle match toggle buttons
+document.querySelectorAll('.match-opt').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.match-opt').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentMatchMode = btn.dataset.mode;
+  });
+});
+
+// File handling functions
+async function handleFiles(files) {
+  for (const file of files) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['xlsx','xls','csv'].includes(ext)) continue;
+    if (uploadedFiles.find(f => f.name === file.name)) continue;
+    try {
+      const sheets = await readFile(file);
+      uploadedFiles.push({ name: file.name, size: file.size, sheets });
+    } catch(e) { console.warn(`Error reading ${file.name}`, e); }
+  }
+  renderFileList();
+  updateSearchButton();
+}
+
+function renderFileList() {
+  fileListDiv.innerHTML = '';
+  let totalSheets = 0;
+  const tags = [];
+  uploadedFiles.forEach((f, idx) => {
+    const sheetNames = Object.keys(f.sheets);
+    totalSheets += sheetNames.length;
+    sheetNames.forEach(s => tags.push(`${f.name} › ${s}`));
+    const div = document.createElement('div');
+    div.className = 'file-item';
+    div.innerHTML = `
+      <span class="file-icon">📊</span>
+      <span class="file-name" title="${escHtml(f.name)}">${escHtml(f.name)}</span>
+      <span class="file-meta">${sheetNames.length} sheet${sheetNames.length!==1?'s':''}</span>
+      <button class="remove-btn" data-idx="${idx}">×</button>
+    `;
+    fileListDiv.appendChild(div);
+  });
+  // attach remove events
+  document.querySelectorAll('.remove-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = parseInt(btn.dataset.idx);
+      uploadedFiles.splice(idx, 1);
+      renderFileList();
+      updateSearchButton();
+      if (uploadedFiles.length === 0) {
+        sheetSummaryDiv.innerHTML = '';
+        // also clear results area to empty state
+        resultsPanel.innerHTML = `
+          <div class="empty-state">
+            <div class="big-icon">🔎</div>
+            <h3>General Search Ready</h3>
+            <p>Upload Excel/CSV files, enter any values (one per line), choose Exact or Contains match, and click <strong>Search Values</strong>. Results appear here with highlighted matches.</p>
+          </div>
+        `;
+      } else {
+        updateSheetSummary(tags);
+      }
+    });
+  });
+  if (uploadedFiles.length === 0) {
+    sheetSummaryDiv.innerHTML = '';
+    return;
+  }
+  const totalRows = uploadedFiles.reduce((acc, f) => acc + Object.values(f.sheets).reduce((rsum, rows) => rsum + rows.length, 0), 0);
+  sheetSummaryDiv.innerHTML = `
+    <div style="margin-bottom:5px;font-size:11px;">${totalSheets} sheet${totalSheets!==1?'s':''} across ${uploadedFiles.length} file${uploadedFiles.length!==1?'s':''} · ~${totalRows.toLocaleString()} rows</div>
+    ${tags.slice(0,12).map(s=>`<span class="tag">${escHtml(s)}</span>`).join('')}
+    ${tags.length>12?`<span class="tag">+${tags.length-12} more</span>`:''}
+  `;
+}
+
+function updateSheetSummary(tagsArray) {
+  if (uploadedFiles.length === 0) { sheetSummaryDiv.innerHTML = ''; return; }
+  let totalSheets = 0;
+  const tags = [];
+  uploadedFiles.forEach(f => { 
+    const sn = Object.keys(f.sheets);
+    totalSheets += sn.length;
+    sn.forEach(s => tags.push(`${f.name} › ${s}`));
+  });
+  const totalRows = uploadedFiles.reduce((acc, f) => acc + Object.values(f.sheets).reduce((rsum, rows) => rsum + rows.length, 0), 0);
+  sheetSummaryDiv.innerHTML = `
+    <div style="margin-bottom:5px;font-size:11px;">${totalSheets} sheet${totalSheets!==1?'s':''} across ${uploadedFiles.length} file${uploadedFiles.length!==1?'s':''} · ~${totalRows.toLocaleString()} rows</div>
+    ${tags.slice(0,12).map(s=>`<span class="tag">${escHtml(s)}</span>`).join('')}
+    ${tags.length>12?`<span class="tag">+${tags.length-12} more</span>`:''}
+  `;
+}
+
+// Drag & drop events
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); handleFiles([...e.dataTransfer.files]); });
+fileInput.addEventListener('change', () => handleFiles([...fileInput.files]));
+
+// Search input live count
+function updateValueCount() {
+  const vals = parseLines(searchInput.value);
+  valueCountSpan.textContent = `${vals.length} value${vals.length!==1?'s':''}`;
+  updateSearchButton();
+}
+searchInput.addEventListener('input', updateValueCount);
+function updateSearchButton() {
+  const hasFiles = uploadedFiles.length > 0;
+  const hasValues = parseLines(searchInput.value).length > 0;
+  searchBtn.disabled = !(hasFiles && hasValues);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  CORE SEARCH ENGINE (General search)
+// ═══════════════════════════════════════════════════════════════════
+function performGeneralSearch(valuesArray, files, mode) {
+  // result map: each value -> { value, matches: [] }
+  const resultMap = {};
+  valuesArray.forEach(v => { resultMap[v] = { value: v, matches: [] }; });
+
+  for (const file of files) {
+    for (const [sheet, rows] of Object.entries(file.sheets)) {
+      const header = rows[0] ? rows[0].map(c => String(c)) : [];
+      // iterate rows
+      for (let ri = 0; ri < rows.length; ri++) {
+        const row = rows[ri];
+        for (let ci = 0; ci < row.length; ci++) {
+          let cellRaw = row[ci];
+          // handle null/undefined/empty
+          if (cellRaw === undefined || cellRaw === null) cellRaw = '';
+          const cell = String(cellRaw).trim();
+          if (cell === '') continue;
+          const cellLower = cell.toLowerCase();
+
+          for (const val of valuesArray) {
+            const valLower = val.toLowerCase();
+            let matched = false;
+            if (mode === 'exact') {
+              matched = cellLower === valLower;
+            } else { // contains
+              matched = cellLower.includes(valLower);
+            }
+            if (matched) {
+              // build row preview (first 5 non-empty cells)
+              const rowData = row.map(c => String(c !== undefined && c !== null ? c : '')).filter(c => c.trim());
+              const colName = (header[ci] && header[ci].trim()) ? String(header[ci]) : `Col ${ci+1}`;
+              resultMap[val].matches.push({
+                file: file.name,
+                sheet: sheet,
+                row: ri + 1,
+                colIdx: ci,
+                colName: colName,
+                cellValue: cell,
+                rowPreview: rowData.join(' · ')
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+  // preserve original order of valuesArray
+  return valuesArray.map(v => resultMap[v]);
+}
+
+// Highlight for contains mode (with optional class)
+function highlightContains(originalText, query, cls = 'purple-hl') {
+  const escapedFull = escHtml(originalText);
+  const queryLower = query.toLowerCase();
+  const textLower = originalText.toLowerCase();
+  const idx = textLower.indexOf(queryLower);
+  if (idx === -1) return escapedFull;
+  const prefix = escHtml(originalText.slice(0, idx));
+  const match = escHtml(originalText.slice(idx, idx + query.length));
+  const suffix = escHtml(originalText.slice(idx + query.length));
+  return `${prefix}<span class="hl ${cls}">${match}</span>${suffix}`;
+}
+
+// Render results table
+function renderGeneralResults(results, mode) {
+  const foundCount = results.filter(r => r.matches.length > 0).length;
+  const notFoundCount = results.filter(r => r.matches.length === 0).length;
+  const totalMatches = results.reduce((acc, r) => acc + r.matches.length, 0);
+
+  resultsPanel.innerHTML = `
+    <div class="results-header">
+      <h2>Results <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:6px;">${mode === 'exact' ? 'Exact match' : 'Contains match'}</span></h2>
+      <div class="stats">
+        <div class="stat"><div class="dot green"></div>${foundCount} found</div>
+        <div class="stat"><div class="dot red"></div>${notFoundCount} not found</div>
+        <div class="stat"><div class="dot purple"></div>${totalMatches} matches</div>
+      </div>
+      <button class="export-btn" id="exportResultsBtn">⬇ Export CSV</button>
+    </div>
+    <div class="results-body">
+      <table>
+        <thead>
+          <tr>
+            <th>Search Value</th><th>Status</th><th>Matched Cell</th><th>Column</th><th>File</th><th>Sheet</th><th>Row</th><th>Row Data Preview</th>
+          </tr>
+        </thead>
+        <tbody id="resultsTbody"></tbody>
+      </table>
+    </div>
+  `;
+
+  const tbody = document.getElementById('resultsTbody');
+  for (const res of results) {
+    if (res.matches.length === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="val-cell">${escHtml(res.value)}</td>
+        <td><span class="status-badge not-found">NOT FOUND</span></td>
+        <td colspan="6" style="color:var(--muted)">—</td>
+      `;
+      tbody.appendChild(tr);
+    } else {
+      res.matches.forEach((match, idx) => {
+        const tr = document.createElement('tr');
+        let matchedCellHtml = '';
+        if (mode === 'contains') {
+          matchedCellHtml = highlightContains(match.cellValue, res.value, 'purple-hl');
+        } else {
+          matchedCellHtml = escHtml(match.cellValue);
+        }
+        tr.innerHTML = `
+          <td class="val-cell">${idx === 0 ? escHtml(res.value) : ''}${res.matches.length > 1 && idx === 0 ? `<span class="match-count">×${res.matches.length}</span>` : ''}</td>
+          <td>${idx === 0 ? '<span class="status-badge found">FOUND</span>' : ''}</td>
+          <td class="location-cell" style="max-width:180px; overflow:hidden; text-overflow:ellipsis;" title="${escHtml(match.cellValue)}">${matchedCellHtml}</td>
+          <td class="location-cell"><span class="col-badge">${escHtml(match.colName)}</span></td>
+          <td class="location-cell" title="${escHtml(match.file)}">${escHtml(shortName(match.file))}</td>
+          <td class="location-cell">${escHtml(match.sheet)}</td>
+          <td class="location-cell" style="text-align:center">${match.row}</td>
+          <td class="row-preview" title="${escHtml(match.rowPreview)}">${escHtml(match.rowPreview)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+  }
+
+  // Attach export handler
+  const exportBtn = document.getElementById('exportResultsBtn');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+      const csvRows = [];
+      for (const res of results) {
+        if (res.matches.length === 0) {
+          csvRows.push([res.value, 'NOT FOUND', '', '', '', '', '', '']);
+        } else {
+          res.matches.forEach(m => {
+            csvRows.push([res.value, 'FOUND', m.cellValue, m.colName, m.file, m.sheet, m.row, m.rowPreview]);
+          });
+        }
+      }
+      exportCSV(['Search Value', 'Status', 'Matched Cell', 'Column', 'File', 'Sheet', 'Row', 'Row Preview'], csvRows, `general-search-${Date.now()}.csv`);
+    });
+  }
+}
+
+// Search action
+searchBtn.addEventListener('click', async () => {
+  const values = parseLines(searchInput.value);
+  if (values.length === 0 || uploadedFiles.length === 0) return;
+  
+  // UI loading state
+  searchSpinner.style.display = 'block';
+  searchBtnText.textContent = 'Searching…';
+  searchBtn.disabled = true;
+  
+  // slight delay to allow UI update, but search is synchronous (fast enough)
+  setTimeout(() => {
+    const searchResults = performGeneralSearch(values, uploadedFiles, currentMatchMode);
+    renderGeneralResults(searchResults, currentMatchMode);
+    searchSpinner.style.display = 'none';
+    searchBtnText.textContent = 'Search Values';
+    searchBtn.disabled = false;
+  }, 20);
+});
+
+// initial update of value count
+updateValueCount();
+</script>
+</body>
+</html>
