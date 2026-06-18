@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Excel General Search Tool</title>
+<title>Excel Operations Suite</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Inter:wght@400;500;600&display=swap');
@@ -17,17 +17,28 @@
     --text: #e8eaf0; --muted: #7a7f99;
     --mono: 'IBM Plex Mono', monospace; --sans: 'Inter', sans-serif;
   }
-  body { background:var(--bg); color:var(--text); font-family:var(--sans); min-height:100vh; display:flex; flex-direction:column; }
+  body { background:var(--bg); color:var(--text); font-family:var(--sans); height:100vh; overflow:hidden; display:flex; flex-direction:column; }
 
   /* HEADER */
-  header { border-bottom:1px solid var(--border); padding:14px 28px; display:flex; align-items:center; gap:14px; }
+  header { border-bottom:1px solid var(--border); padding:14px 28px; display:flex; align-items:center; gap:14px; flex-shrink:0; }
   .logo-mark { width:30px;height:30px;background:var(--accent);border-radius:7px;display:grid;place-items:center;font-family:var(--mono);font-weight:600;font-size:13px;color:#fff;flex-shrink:0; }
   header h1 { font-size:14px;font-weight:600;color:var(--text); }
   header .sub { font-size:12px;color:var(--muted);margin-left:4px; }
 
+  /* TAB BAR */
+  .tab-bar { display:flex; gap:4px; padding:0 28px; border-bottom:1px solid var(--border); background:var(--bg); flex-shrink:0; }
+  .tab-btn { padding:11px 16px; font-size:13px; font-weight:500; color:var(--muted); background:none; border:none; cursor:pointer; border-bottom:2px solid transparent; transition:color .15s,border-color .15s; }
+  .tab-btn:hover { color:var(--text); }
+  .tab-btn.active { color:var(--text); border-bottom-color:var(--accent); }
+
+  /* TAB CONTENT WRAPPER */
+  .tab-content { flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0; }
+  .tab-page { flex:1; display:none; min-height:0; overflow:hidden; }
+  .tab-page.active { display:flex; flex-direction:column; }
+
   /* MAIN LAYOUT - full width */
-  .main-container { flex:1; display:flex; flex-direction:column; height:calc(100vh - 97px); }
-  .layout { flex:1; display:grid; grid-template-columns:370px 1fr; height:100%; }
+  .main-container { flex:1; display:flex; flex-direction:column; height:100%; min-height:0; }
+  .layout { flex:1; display:grid; grid-template-columns:370px 1fr; height:100%; min-height:0; }
 
   /* LEFT PANEL */
   .left { border-right:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; overflow-x:hidden; background:var(--bg); }
@@ -117,11 +128,80 @@
   .hl { background:rgba(79,142,247,0.25);color:var(--text);border-radius:2px;padding:0 2px; }
   .hl.purple-hl { background:rgba(176,126,247,0.25); }
 
+  /* DUPLICATE HIGHLIGHT in provision preview */
+  td.dup-cell { background:rgba(247,111,111,0.18); }
+  td.mismatch-cell { box-shadow:inset 0 0 0 2px var(--yellow); }
+  .dup-note { font-size:11px;font-weight:600;color:var(--red); }
+  .dup-note.none { font-size:11px;color:var(--muted);font-weight:400; }
+  .issue-badge { display:inline-block;font-size:10px;font-weight:600;border-radius:4px;padding:2px 6px;margin:1px 4px 1px 0;white-space:nowrap; }
+  .issue-badge.dup { background:var(--red-dim);color:var(--red); }
+  .issue-badge.mismatch { background:rgba(247,201,79,0.15);color:var(--yellow); }
+
+  /* CHECKBOX FIELD */
+  .checkbox-label { display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);cursor:pointer;font-weight:500; }
+  .checkbox-label input[type="checkbox"] { width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0; }
+
+  /* TWO-WINDOW SPLIT: preview table + issues pane */
+  .prov-results-split { flex:1;display:flex;overflow:hidden;min-height:0; }
+  .prov-preview-pane { flex:1 1 58%;overflow-y:auto;border-right:1px solid var(--border);min-width:0; }
+  .prov-issues-pane { flex:1 1 42%;overflow-y:auto;padding:16px;background:var(--surface2);min-width:0; }
+  .prov-issues-heading { font-size:12px;font-weight:600;color:var(--text);margin-bottom:10px;display:flex;align-items:center;gap:6px; }
+  .prov-issues-heading.warn { color:var(--red); }
+  .prov-issues-heading.ok { color:var(--green); }
+  .prov-issues-section { margin-bottom:18px; }
+  .prov-issues-section:last-child { margin-bottom:0; }
+
+  /* DUPLICATE SUMMARY PANEL */
+  .dup-summary-col { margin-bottom:10px; }
+  .dup-summary-col:last-child { margin-bottom:0; }
+  .dup-summary-colname { font-size:11px;font-weight:600;color:var(--text);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px; }
+  .dup-summary-row { display:flex;align-items:baseline;gap:9px;font-size:12px;padding:3px 0;flex-wrap:wrap; }
+  .dup-summary-value { font-family:var(--mono);font-weight:600;color:var(--red);background:rgba(247,111,111,0.12);border-radius:4px;padding:1px 6px; }
+  .dup-summary-count { font-family:var(--mono);font-size:11px;color:var(--text);font-weight:600; }
+  .dup-summary-rows { color:var(--muted);font-size:11px;font-family:var(--mono); }
+
+  /* MISMATCH LIST */
+  .mismatch-row { display:flex;flex-direction:column;gap:1px;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border); }
+  .mismatch-row:last-child { border-bottom:none; }
+  .mismatch-row .mm-row-num { color:var(--muted);font-size:10px;font-family:var(--mono);text-transform:uppercase;letter-spacing:0.04em; }
+  .mismatch-row .mm-vals { font-family:var(--mono);font-size:12px;color:var(--text); }
+  .mismatch-row .mm-vals b { color:var(--yellow); }
+
   /* EMPTY STATE */
   .empty-state { flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;color:var(--muted);padding:40px;text-align:center; }
   .empty-state .big-icon { font-size:44px;margin-bottom:4px; }
   .empty-state h3 { font-size:14px;color:var(--text);font-weight:600; }
   .empty-state p { font-size:13px;line-height:1.6;max-width:300px; }
+
+  /* ===== NEW: generic form controls (Comparator + Provision pages) ===== */
+  .form-field { padding:12px 14px;border-bottom:1px solid var(--border); }
+  .form-field label { font-size:11px;color:var(--muted);display:block;margin-bottom:5px; }
+  .text-input, .select-input { width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-size:13px;font-family:var(--sans);outline:none; }
+  .text-input:focus, .select-input:focus { border-color:var(--accent); }
+  .inline-add { display:flex;gap:6px;margin-top:6px; }
+  .inline-add input { flex:1; }
+  .small-btn { background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--text);font-size:12px;cursor:pointer;white-space:nowrap; }
+  .small-btn:hover { border-color:var(--accent);color:var(--accent); }
+
+  /* column mapping rows (Provision page) */
+  .map-row { display:flex;align-items:center;gap:8px;margin-bottom:8px; }
+  .map-row .map-label { flex:0 0 140px;font-size:11.5px;color:var(--muted); }
+  .map-row select { flex:1; }
+
+  /* checkbox list (Comparator page) */
+  .col-check-list { display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;padding:4px 2px 12px; }
+  .col-check-item { display:flex;align-items:center;gap:8px;font-size:13px; }
+  .col-check-item input { accent-color:var(--accent);width:14px;height:14px; }
+
+  /* comparison result cards */
+  .compare-card { border:1px solid var(--border);border-radius:10px;margin:14px;background:var(--surface2);overflow:hidden; }
+  .compare-card-header { padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px; }
+  .compare-card-header h3 { font-size:13px;font-weight:600;font-family:var(--mono); }
+  .compare-stats { display:flex;gap:8px;flex-wrap:wrap; }
+  .badge { padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600;font-family:var(--mono);white-space:nowrap; }
+  .badge.green { background:var(--green-dim);color:var(--green); }
+  .badge.red { background:var(--red-dim);color:var(--red); }
+  .badge.yellow { background:rgba(247,201,79,0.15);color:var(--yellow); }
 
   @media(max-width:768px){
     .layout{grid-template-columns:1fr;grid-template-rows:auto 1fr;height:auto;}
@@ -133,60 +213,204 @@
 
 <header>
   <div class="logo-mark">🔎</div>
-  <h1>Excel General Search Tool <span class="sub">— Multi‑File Lookup</span></h1>
+  <h1>Excel Operations Suite <span class="sub">— Lookup · Comparator · Production→Provision</span></h1>
 </header>
 
-<div class="main-container">
-  <div class="layout">
-    <!-- LEFT PANEL: File Upload + Search Input -->
-    <div class="left">
-      <div class="panel-label">1 — Upload Excel Files</div>
-      <div class="drop-zone" id="dropZone">
-        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple />
-        <div class="drop-icon">📂</div>
-        <p><strong>Drop files here</strong> or click to browse</p>
-        <p>Multiple files supported</p>
-        <div class="formats">.xlsx · .xls · .csv</div>
-      </div>
-      <div class="file-list" id="fileList"></div>
-      <div class="sheet-summary" id="sheetSummary"></div>
-      <div class="divider"></div>
-      <div class="panel-label" style="border-bottom:none;padding-bottom:6px;">2 — Enter Values to Search</div>
-      <div class="search-section">
-        <label>One value per line — any type (ID, IMEI, ICCID, name, text…)</label>
-        <textarea class="id-textarea" id="searchInput"
-          placeholder="BSF2345678&#10;546374843656&#10;647383837844774&#10;John Smith&#10;example@domain.com"></textarea>
-        <div class="input-footer">
-          <span class="val-count" id="valueCount">0 values</span>
-          <div class="match-toggle" id="matchToggle">
-            <button class="match-opt active" data-mode="exact">Exact</button>
-            <button class="match-opt" data-mode="contains">Contains</button>
+<nav class="tab-bar">
+  <button class="tab-btn active" data-tab="tab-lookup">General Lookup</button>
+  <button class="tab-btn" data-tab="tab-compare">Excel Comparator</button>
+  <button class="tab-btn" data-tab="tab-provision">Production → Provision</button>
+</nav>
+
+<div class="tab-content">
+
+  <!-- ════════════════════════════════════════════════════════════════
+       PAGE 1 — GENERAL LOOKUP (unchanged from original tool)
+  ════════════════════════════════════════════════════════════════ -->
+  <div class="tab-page active" id="tab-lookup">
+    <div class="main-container">
+      <div class="layout">
+        <!-- LEFT PANEL: File Upload + Search Input -->
+        <div class="left">
+          <div class="panel-label">1 — Upload Excel Files</div>
+          <div class="drop-zone" id="dropZone">
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple />
+            <div class="drop-icon">📂</div>
+            <p><strong>Drop files here</strong> or click to browse</p>
+            <p>Multiple files supported</p>
+            <div class="formats">.xlsx · .xls · .csv</div>
+          </div>
+          <div class="file-list" id="fileList"></div>
+          <div class="sheet-summary" id="sheetSummary"></div>
+          <div class="divider"></div>
+          <div class="panel-label" style="border-bottom:none;padding-bottom:6px;">2 — Enter Values to Search</div>
+          <div class="search-section">
+            <label>One value per line — any type (ID, IMEI, ICCID, name, text…)</label>
+            <textarea class="id-textarea" id="searchInput"
+              placeholder="BSF2345678&#10;546374843656&#10;647383837844774&#10;John Smith&#10;example@domain.com"></textarea>
+            <div class="input-footer">
+              <span class="val-count" id="valueCount">0 values</span>
+              <div class="match-toggle" id="matchToggle">
+                <button class="match-opt active" data-mode="exact">Exact</button>
+                <button class="match-opt" data-mode="contains">Contains</button>
+              </div>
+            </div>
+            <button class="search-btn purple" id="searchBtn" disabled>
+              <span class="spinner" id="searchSpinner"></span>
+              <span id="searchBtnText">Search Values</span>
+            </button>
           </div>
         </div>
-        <button class="search-btn purple" id="searchBtn" disabled>
-          <span class="spinner" id="searchSpinner"></span>
-          <span id="searchBtnText">Search Values</span>
-        </button>
-      </div>
-    </div>
 
-    <!-- RIGHT PANEL: Results Area -->
-    <div class="right" id="resultsPanel">
-      <div class="empty-state">
-        <div class="big-icon">🔎</div>
-        <h3>General Search Ready</h3>
-        <p>Upload Excel/CSV files, enter any values (one per line), choose Exact or Contains match, and click <strong>Search Values</strong>. Results appear here with highlighted matches.</p>
+        <!-- RIGHT PANEL: Results Area -->
+        <div class="right" id="resultsPanel">
+          <div class="empty-state">
+            <div class="big-icon">🔎</div>
+            <h3>General Search Ready</h3>
+            <p>Upload Excel/CSV files, enter any values (one per line), choose Exact or Contains match, and click <strong>Search Values</strong>. Results appear here with highlighted matches.</p>
+          </div>
+        </div>
       </div>
     </div>
   </div>
-</div>
+
+  <!-- ════════════════════════════════════════════════════════════════
+       PAGE 2 — EXCEL COMPARATOR
+  ════════════════════════════════════════════════════════════════ -->
+  <div class="tab-page" id="tab-compare">
+    <div class="main-container">
+      <div class="layout">
+        <div class="left">
+          <div class="panel-label">1 — Upload File A</div>
+          <div class="drop-zone" id="cmpDropZoneA">
+            <input type="file" id="cmpFileInputA" accept=".xlsx,.xls,.csv" />
+            <div class="drop-icon">📂</div>
+            <p><strong>Drop File A</strong> or click to browse</p>
+            <div class="formats">.xlsx · .xls · .csv</div>
+          </div>
+          <div class="file-list" id="cmpFileListA"></div>
+          <select class="select-input" id="cmpSheetSelA" style="display:none;margin:0 14px 12px;width:calc(100% - 28px);"></select>
+
+          <div class="panel-label">2 — Upload File B</div>
+          <div class="drop-zone" id="cmpDropZoneB">
+            <input type="file" id="cmpFileInputB" accept=".xlsx,.xls,.csv" />
+            <div class="drop-icon">📂</div>
+            <p><strong>Drop File B</strong> or click to browse</p>
+            <div class="formats">.xlsx · .xls · .csv</div>
+          </div>
+          <div class="file-list" id="cmpFileListB"></div>
+          <select class="select-input" id="cmpSheetSelB" style="display:none;margin:0 14px 12px;width:calc(100% - 28px);"></select>
+
+          <div class="divider"></div>
+          <div class="panel-label" style="border-bottom:none;padding-bottom:6px;">3 — Columns to Compare</div>
+          <div style="padding:0 14px;" id="cmpColumnList">
+            <p style="font-size:12px;color:var(--muted);padding:8px 2px;">Upload both files to detect matching column names (e.g. IMEI, ICCID, Bee Name).</p>
+          </div>
+          <div style="padding:0 14px 14px;">
+            <button class="search-btn purple" id="cmpCompareBtn" disabled>Compare Columns</button>
+          </div>
+        </div>
+
+        <div class="right" id="cmpResultsPanel">
+          <div class="empty-state">
+            <div class="big-icon">🔀</div>
+            <h3>Excel Comparator Ready</h3>
+            <p>Upload two files that share column names (e.g. IMEI, ICCID, Bee Name), pick which columns to compare, then click <strong>Compare Columns</strong> to see what was added, removed, or mismatched between them.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════
+       PAGE 3 — PRODUCTION → PROVISION CONVERTER
+  ════════════════════════════════════════════════════════════════ -->
+  <div class="tab-page" id="tab-provision">
+    <div class="main-container">
+      <div class="layout">
+        <div class="left">
+          <div class="panel-label">1 — Upload Production Excel</div>
+          <div class="drop-zone" id="provDropZone">
+            <input type="file" id="provFileInput" accept=".xlsx,.xls,.csv" />
+            <div class="drop-icon">📂</div>
+            <p><strong>Drop production file</strong> or click to browse</p>
+            <div class="formats">.xlsx · .xls · .csv</div>
+          </div>
+          <div class="file-list" id="provFileList"></div>
+          <select class="select-input" id="provSheetSel" style="display:none;margin:0 14px 12px;width:calc(100% - 28px);"></select>
+
+          <div class="divider"></div>
+          <div class="panel-label" style="border-bottom:none;padding-bottom:6px;">2 — Confirm Column Mapping</div>
+          <div style="padding:0 14px 6px;" id="provMappingArea">
+            <p style="font-size:12px;color:var(--muted);padding:4px 2px 10px;">Upload a production file above to map its columns.</p>
+          </div>
+
+          <div class="divider"></div>
+          <div class="panel-label" style="border-bottom:none;padding-bottom:6px;">3 — Device & Provisioning Details</div>
+          <div class="form-field">
+            <label>Device Type</label>
+            <input type="text" class="text-input" id="provDeviceType" placeholder="e.g. Bee Sensor v3" />
+          </div>
+          <div class="form-field">
+            <label>Battery Type</label>
+            <select class="select-input" id="provBatteryType">
+              <option value="">— select —</option>
+              <option>CR123</option><option>Li-ion</option><option>NLB</option><option>CR2032</option>
+              <option>CR2044</option><option>er14250</option><option>Li-SOCl2</option><option>NiMH</option><option>ZnMnO2</option>
+            </select>
+            <div class="inline-add">
+              <input type="text" class="text-input" id="provBatteryCustom" placeholder="Add custom battery type…" />
+              <button class="small-btn" id="provBatteryAddBtn">+ Add</button>
+            </div>
+          </div>
+          <div class="form-field">
+            <label>Carrier Type</label>
+            <select class="select-input" id="provCarrierType">
+              <option value="">— select —</option>
+              <option>Aeris-Global</option><option>Onomondo</option><option>Aeris-AT&amp;T</option><option>Airtel</option>
+              <option>floLIVE</option><option>Maxis</option><option>Orange</option><option>Other</option><option>Sprint</option>
+              <option>Telefonica</option><option>Telenor</option><option>Telkomsel</option><option>Tmobile</option><option>Vodafone</option>
+            </select>
+            <div class="inline-add">
+              <input type="text" class="text-input" id="provCarrierCustom" placeholder="Add custom carrier…" />
+              <button class="small-btn" id="provCarrierAddBtn">+ Add</button>
+            </div>
+          </div>
+          <div class="form-field" style="border-bottom:none;">
+            <label>Finance Lot Number</label>
+            <input type="text" class="text-input" id="provFinanceLot" placeholder="e.g. FL-2026-014" />
+          </div>
+          <div class="form-field" style="border-bottom:none;">
+            <label class="checkbox-label">
+              <input type="checkbox" id="provCheckBeeImei" />
+              Check Bee Number vs IMEI (last 7 digits)
+            </label>
+            <p style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.5;">Some devices derive the Bee Number from the IMEI's last 7 digits (e.g. Bee Number "BLB2589217" ↔ IMEI ending "...2589217"). Enable this to flag rows where they don't match — not all devices follow this pattern, so it's off by default.</p>
+          </div>
+          <div style="padding:0 14px 14px;">
+            <button class="search-btn purple" id="provConvertBtn" disabled>Convert to Provision Excel</button>
+          </div>
+        </div>
+
+        <div class="right" id="provResultsPanel">
+          <div class="empty-state">
+            <div class="big-icon">🔁</div>
+            <h3>Production → Provision Converter</h3>
+            <p>Upload a production excel, confirm the column mapping, fill in device / carrier / battery / finance lot details, then convert. You'll be able to preview and download the finished provision excel.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /.tab-content -->
 
 <script>
 // ═══════════════════════════════════════════════════════════════════
-//  UTILITIES
+//  SHARED UTILITIES (used across all 3 pages)
 // ═══════════════════════════════════════════════════════════════════
 function escHtml(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function shortName(name, max=22) {
   return name.length > max ? name.slice(0, max-1)+'…' : name;
@@ -224,7 +448,19 @@ function parseLines(val) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  FILE MANAGER (single instance for general search)
+//  TAB SWITCHING
+// ═══════════════════════════════════════════════════════════════════
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  PAGE 1 — GENERAL LOOKUP (unchanged logic from original tool)
 // ═══════════════════════════════════════════════════════════════════
 let uploadedFiles = []; // { name, sheets }
 
@@ -239,10 +475,8 @@ const searchSpinner = document.getElementById('searchSpinner');
 const searchBtnText = document.getElementById('searchBtnText');
 const resultsPanel = document.getElementById('resultsPanel');
 
-// Match mode: exact or contains
 let currentMatchMode = 'exact';
 
-// Handle match toggle buttons
 document.querySelectorAll('.match-opt').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.match-opt').forEach(b => b.classList.remove('active'));
@@ -251,7 +485,6 @@ document.querySelectorAll('.match-opt').forEach(btn => {
   });
 });
 
-// File handling functions
 async function handleFiles(files) {
   for (const file of files) {
     const ext = file.name.split('.').pop().toLowerCase();
@@ -284,7 +517,6 @@ function renderFileList() {
     `;
     fileListDiv.appendChild(div);
   });
-  // attach remove events
   document.querySelectorAll('.remove-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const idx = parseInt(btn.dataset.idx);
@@ -293,7 +525,6 @@ function renderFileList() {
       updateSearchButton();
       if (uploadedFiles.length === 0) {
         sheetSummaryDiv.innerHTML = '';
-        // also clear results area to empty state
         resultsPanel.innerHTML = `
           <div class="empty-state">
             <div class="big-icon">🔎</div>
@@ -322,7 +553,7 @@ function updateSheetSummary(tagsArray) {
   if (uploadedFiles.length === 0) { sheetSummaryDiv.innerHTML = ''; return; }
   let totalSheets = 0;
   const tags = [];
-  uploadedFiles.forEach(f => { 
+  uploadedFiles.forEach(f => {
     const sn = Object.keys(f.sheets);
     totalSheets += sn.length;
     sn.forEach(s => tags.push(`${f.name} › ${s}`));
@@ -335,13 +566,11 @@ function updateSheetSummary(tagsArray) {
   `;
 }
 
-// Drag & drop events
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
 dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); handleFiles([...e.dataTransfer.files]); });
 fileInput.addEventListener('change', () => handleFiles([...fileInput.files]));
 
-// Search input live count
 function updateValueCount() {
   const vals = parseLines(searchInput.value);
   valueCountSpan.textContent = `${vals.length} value${vals.length!==1?'s':''}`;
@@ -354,23 +583,17 @@ function updateSearchButton() {
   searchBtn.disabled = !(hasFiles && hasValues);
 }
 
-// ═══════════════════════════════════════════════════════════════════
-//  CORE SEARCH ENGINE (General search)
-// ═══════════════════════════════════════════════════════════════════
 function performGeneralSearch(valuesArray, files, mode) {
-  // result map: each value -> { value, matches: [] }
   const resultMap = {};
   valuesArray.forEach(v => { resultMap[v] = { value: v, matches: [] }; });
 
   for (const file of files) {
     for (const [sheet, rows] of Object.entries(file.sheets)) {
       const header = rows[0] ? rows[0].map(c => String(c)) : [];
-      // iterate rows
       for (let ri = 0; ri < rows.length; ri++) {
         const row = rows[ri];
         for (let ci = 0; ci < row.length; ci++) {
           let cellRaw = row[ci];
-          // handle null/undefined/empty
           if (cellRaw === undefined || cellRaw === null) cellRaw = '';
           const cell = String(cellRaw).trim();
           if (cell === '') continue;
@@ -381,11 +604,10 @@ function performGeneralSearch(valuesArray, files, mode) {
             let matched = false;
             if (mode === 'exact') {
               matched = cellLower === valLower;
-            } else { // contains
+            } else {
               matched = cellLower.includes(valLower);
             }
             if (matched) {
-              // build row preview (first 5 non-empty cells)
               const rowData = row.map(c => String(c !== undefined && c !== null ? c : '')).filter(c => c.trim());
               const colName = (header[ci] && header[ci].trim()) ? String(header[ci]) : `Col ${ci+1}`;
               resultMap[val].matches.push({
@@ -403,11 +625,9 @@ function performGeneralSearch(valuesArray, files, mode) {
       }
     }
   }
-  // preserve original order of valuesArray
   return valuesArray.map(v => resultMap[v]);
 }
 
-// Highlight for contains mode (with optional class)
 function highlightContains(originalText, query, cls = 'purple-hl') {
   const escapedFull = escHtml(originalText);
   const queryLower = query.toLowerCase();
@@ -420,7 +640,6 @@ function highlightContains(originalText, query, cls = 'purple-hl') {
   return `${prefix}<span class="hl ${cls}">${match}</span>${suffix}`;
 }
 
-// Render results table
 function renderGeneralResults(results, mode) {
   const foundCount = results.filter(r => r.matches.length > 0).length;
   const notFoundCount = results.filter(r => r.matches.length === 0).length;
@@ -482,7 +701,6 @@ function renderGeneralResults(results, mode) {
     }
   }
 
-  // Attach export handler
   const exportBtn = document.getElementById('exportResultsBtn');
   if (exportBtn) {
     exportBtn.addEventListener('click', () => {
@@ -501,17 +719,14 @@ function renderGeneralResults(results, mode) {
   }
 }
 
-// Search action
 searchBtn.addEventListener('click', async () => {
   const values = parseLines(searchInput.value);
   if (values.length === 0 || uploadedFiles.length === 0) return;
-  
-  // UI loading state
+
   searchSpinner.style.display = 'block';
   searchBtnText.textContent = 'Searching…';
   searchBtn.disabled = true;
-  
-  // slight delay to allow UI update, but search is synchronous (fast enough)
+
   setTimeout(() => {
     const searchResults = performGeneralSearch(values, uploadedFiles, currentMatchMode);
     renderGeneralResults(searchResults, currentMatchMode);
@@ -521,8 +736,517 @@ searchBtn.addEventListener('click', async () => {
   }, 20);
 });
 
-// initial update of value count
 updateValueCount();
+
+// ═══════════════════════════════════════════════════════════════════
+//  PAGE 2 — EXCEL COMPARATOR
+// ═══════════════════════════════════════════════════════════════════
+let cmpFileA = null; // { name, sheets }
+let cmpFileB = null;
+
+function setupCompareDropZone(zoneId, inputId, listId, sheetSelId, onLoaded){
+  const zone = document.getElementById(zoneId);
+  const input = document.getElementById(inputId);
+  zone.addEventListener('dragover', e=>{ e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', ()=>zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e=>{ e.preventDefault(); zone.classList.remove('drag-over'); handleCompareFile(e.dataTransfer.files[0], listId, sheetSelId, onLoaded); });
+  input.addEventListener('change', ()=> handleCompareFile(input.files[0], listId, sheetSelId, onLoaded));
+}
+
+async function handleCompareFile(file, listId, sheetSelId, onLoaded){
+  if(!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if(!['xlsx','xls','csv'].includes(ext)) return;
+  try{
+    const sheets = await readFile(file);
+    const fileObj = { name:file.name, sheets };
+    document.getElementById(listId).innerHTML = `
+      <div class="file-item">
+        <span class="file-icon">📊</span>
+        <span class="file-name" title="${escHtml(file.name)}">${escHtml(file.name)}</span>
+        <span class="file-meta">${Object.keys(sheets).length} sheet${Object.keys(sheets).length!==1?'s':''}</span>
+      </div>`;
+    const sheetSel = document.getElementById(sheetSelId);
+    sheetSel.innerHTML = Object.keys(sheets).map(s=>`<option value="${escHtml(s)}">${escHtml(s)}</option>`).join('');
+    sheetSel.style.display = 'block';
+    onLoaded(fileObj);
+  }catch(e){ console.warn('compare file read error', e); }
+}
+
+setupCompareDropZone('cmpDropZoneA','cmpFileInputA','cmpFileListA','cmpSheetSelA', f=>{ cmpFileA=f; refreshCommonColumns(); });
+setupCompareDropZone('cmpDropZoneB','cmpFileInputB','cmpFileListB','cmpSheetSelB', f=>{ cmpFileB=f; refreshCommonColumns(); });
+
+document.getElementById('cmpSheetSelA').addEventListener('change', refreshCommonColumns);
+document.getElementById('cmpSheetSelB').addEventListener('change', refreshCommonColumns);
+
+function getSelectedSheetRows(fileObj, sheetSelId){
+  if(!fileObj) return null;
+  const sel = document.getElementById(sheetSelId);
+  const sheetName = sel.value || Object.keys(fileObj.sheets)[0];
+  return fileObj.sheets[sheetName] || null;
+}
+
+function refreshCommonColumns(){
+  const listDiv = document.getElementById('cmpColumnList');
+  const compareBtn = document.getElementById('cmpCompareBtn');
+  if(!cmpFileA || !cmpFileB){
+    listDiv.innerHTML = '<p style="font-size:12px;color:var(--muted);padding:8px 2px;">Upload both files to detect matching column names.</p>';
+    compareBtn.disabled = true;
+    return;
+  }
+  const rowsA = getSelectedSheetRows(cmpFileA,'cmpSheetSelA');
+  const rowsB = getSelectedSheetRows(cmpFileB,'cmpSheetSelB');
+  if(!rowsA || !rowsB){ listDiv.innerHTML=''; compareBtn.disabled = true; return; }
+  const headerA = (rowsA[0]||[]).map(h=>String(h));
+  const headerB = (rowsB[0]||[]).map(h=>String(h));
+  const normB = headerB.map(h=>h.trim().toLowerCase());
+  const common = headerA.filter(h => h.trim() !== '' && normB.includes(h.trim().toLowerCase()));
+  if(common.length===0){
+    listDiv.innerHTML = '<p style="font-size:12px;color:var(--red);padding:8px 2px;">No matching column names found between the two selected sheets. Check the sheet selection above.</p>';
+    compareBtn.disabled = true;
+    return;
+  }
+  listDiv.innerHTML = `<div class="col-check-list">${common.map(c=>`
+    <label class="col-check-item"><input type="checkbox" class="cmp-col-cb" value="${escHtml(c)}" checked> ${escHtml(c)}</label>
+  `).join('')}</div>`;
+  compareBtn.disabled = false;
+}
+
+document.getElementById('cmpCompareBtn').addEventListener('click', () => {
+  const rowsA = getSelectedSheetRows(cmpFileA,'cmpSheetSelA');
+  const rowsB = getSelectedSheetRows(cmpFileB,'cmpSheetSelB');
+  if(!rowsA || !rowsB) return;
+  const headerA = (rowsA[0]||[]).map(h=>String(h));
+  const headerB = (rowsB[0]||[]).map(h=>String(h));
+  const selectedCols = [...document.querySelectorAll('.cmp-col-cb:checked')].map(cb=>cb.value);
+  if(selectedCols.length===0) return;
+
+  const colResults = selectedCols.map(colName => {
+    const idxA = headerA.findIndex(h=>h.trim().toLowerCase()===colName.trim().toLowerCase());
+    const idxB = headerB.findIndex(h=>h.trim().toLowerCase()===colName.trim().toLowerCase());
+    const countsA = {}; const countsB = {};
+    for(let r=1; r<rowsA.length; r++){ const v = String(rowsA[r][idxA] ?? '').trim(); if(v) countsA[v]=(countsA[v]||0)+1; }
+    for(let r=1; r<rowsB.length; r++){ const v = String(rowsB[r][idxB] ?? '').trim(); if(v) countsB[v]=(countsB[v]||0)+1; }
+    const allVals = new Set([...Object.keys(countsA), ...Object.keys(countsB)]);
+    const diffs = [];
+    let matched = 0;
+    allVals.forEach(v=>{
+      const a = countsA[v]||0, b = countsB[v]||0;
+      if(a>0 && b===0) diffs.push({ value:v, status:'Removed (in A, missing in B)', a, b });
+      else if(b>0 && a===0) diffs.push({ value:v, status:'Added (in B, missing in A)', a, b });
+      else if(a!==b) diffs.push({ value:v, status:'Count mismatch', a, b });
+      else matched++;
+    });
+    return { colName, matched, diffs };
+  });
+  renderCompareResults(colResults);
+});
+
+function renderCompareResults(colResults){
+  const panel = document.getElementById('cmpResultsPanel');
+  panel.innerHTML = '';
+  panel.style.display = 'flex';
+  panel.style.flexDirection = 'column';
+
+  const header = document.createElement('div');
+  header.className = 'results-header';
+  header.innerHTML = `
+    <h2>Comparison Results <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:6px;">${colResults.length} column(s)</span></h2>
+    <button class="export-btn" id="cmpExportBtn">⬇ Export All Differences (CSV)</button>
+  `;
+  panel.appendChild(header);
+
+  const scrollArea = document.createElement('div');
+  scrollArea.className = 'results-body';
+  colResults.forEach(cr=>{
+    const card = document.createElement('div');
+    card.className = 'compare-card';
+    const removedCount = cr.diffs.filter(d=>d.status.startsWith('Removed')).length;
+    const addedCount = cr.diffs.filter(d=>d.status.startsWith('Added')).length;
+    const mismatchCount = cr.diffs.filter(d=>d.status==='Count mismatch').length;
+    const diffRows = cr.diffs.map(d=>`
+      <tr>
+        <td class="val-cell">${escHtml(d.value)}</td>
+        <td><span class="badge ${d.status.startsWith('Removed')?'red':d.status.startsWith('Added')?'green':'yellow'}">${escHtml(d.status)}</span></td>
+        <td style="text-align:center">${d.a}</td>
+        <td style="text-align:center">${d.b}</td>
+      </tr>`).join('');
+    card.innerHTML = `
+      <div class="compare-card-header">
+        <h3>${escHtml(cr.colName)}</h3>
+        <div class="compare-stats">
+          <span class="badge green">${cr.matched} matched</span>
+          <span class="badge red">${removedCount} removed</span>
+          <span class="badge yellow">${addedCount} added</span>
+          ${mismatchCount ? `<span class="badge yellow">${mismatchCount} count mismatch</span>` : ''}
+        </div>
+      </div>
+      ${cr.diffs.length===0 ? '<p style="padding:14px 16px;font-size:12px;color:var(--muted);">No differences — fully matched between both files.</p>' : `
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Value</th><th>Status</th><th>Count in A</th><th>Count in B</th></tr></thead>
+          <tbody>${diffRows}</tbody>
+        </table>
+      </div>`}
+    `;
+    scrollArea.appendChild(card);
+  });
+  panel.appendChild(scrollArea);
+
+  document.getElementById('cmpExportBtn').addEventListener('click', ()=>{
+    const rows = [];
+    colResults.forEach(cr => cr.diffs.forEach(d => rows.push([cr.colName, d.value, d.status, d.a, d.b])));
+    if(rows.length === 0) rows.push(['—','No differences found across selected columns','','','']);
+    exportCSV(['Column','Value','Status','Count File A','Count File B'], rows, `excel-comparison-${Date.now()}.csv`);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  PAGE 3 — PRODUCTION → PROVISION CONVERTER
+// ═══════════════════════════════════════════════════════════════════
+const PROVISION_HEADERS = [
+  'Bee Name(required)','Bee Number(required)','IMEI(required)','Mobile Number(required)','Sim Number(required)',
+  'Carrier(required)','Device Type(required)','IMSI','Firmware Rev','Batt Capacity','Case Type','Sim Type',
+  'Battery Type','Ping Frequency','Manufacture Date','Provisioned Date','Invoice Number','Monthly Rental Cost',
+  'Dev Src','Control Window','control_window.coldchain.offset','control_window.coldchain.min','control_window.coldchain.medium',
+  'control_window.coldchain.max','control_window.fab.offset','control_window.fab.min','control_window.fab.medium','control_window.fab.max',
+  'control_window.ambient.offset','control_window.ambient.min','control_window.ambient.medium','control_window.ambient.max',
+  'RB Geo[Account Custom Fields]','RB Portal[Account Custom Fields]','RMA[Account Custom Fields]','Lost[Account Custom Fields]',
+  'EOL[Account Custom Fields]','Comments[Account Custom Fields]','Purchase[Account Custom Fields]','Invoice Number[Account Custom Fields]',
+  'Invoice Month[Account Custom Fields]','JL1290721[Account Custom Fields]','Finance Lot Number[Account Custom Fields]',
+  'Financing[Account Custom Fields]','RMA Type[Account Custom Fields]','Reworked[Account Custom Fields]','Battery[Account Custom Fields]',
+  'Closed cycle[Account Custom Fields]','Enter Container Number[Account Custom Fields]','test1[Account Custom Fields]',
+  'RB Hive Station[Account Custom Fields]','Enter Booking Number[Account Custom Fields]','Enter Carrier SCAC Code[Account Custom Fields]',
+  'Bill of Lading[Account Custom Fields]','Active'
+];
+// Index map for the columns this tool actually writes into:
+const PIDX = {
+  beeName: 0, beeNumber: 1, imei: 2, mobile: 3, sim: 4, carrier: 5,
+  deviceType: 6, batteryType: 12, financeLot: 42, active: 54
+};
+
+// Columns checked for duplicate values within the generated Provision Excel.
+// Duplicate = same trimmed value appears in 2+ rows for that group (blank values ignored).
+// Bee Name and Bee Number are grouped together since this tool always sets them to the
+// identical value (both = SN) — checking them separately just shows the same duplicate twice.
+const DUP_CHECK_GROUPS = [
+  { idxs: [PIDX.beeName, PIDX.beeNumber], label: 'Bee Name / Bee Number' },
+  { idxs: [PIDX.imei],   label: 'IMEI' },
+  { idxs: [PIDX.mobile], label: 'Mobile Number' },
+  { idxs: [PIDX.sim],    label: 'Sim Number' }
+];
+
+function computeDuplicates(outRows){
+  const counts = DUP_CHECK_GROUPS.map(()=>({}));
+  outRows.forEach(row=>{
+    DUP_CHECK_GROUPS.forEach((g,gi)=>{
+      const v = String(row[g.idxs[0]] ?? '').trim();
+      if(v) counts[gi][v] = (counts[gi][v]||0)+1;
+    });
+  });
+  return outRows.map(row=>{
+    const dupIdxSet = new Set();
+    const dupLabels = [];
+    DUP_CHECK_GROUPS.forEach((g,gi)=>{
+      const v = String(row[g.idxs[0]] ?? '').trim();
+      if(v && counts[gi][v] > 1){ g.idxs.forEach(idx=>dupIdxSet.add(idx)); dupLabels.push(g.label); }
+    });
+    return { dupIdxSet, note: dupLabels.join(', ') };
+  });
+}
+
+// Groups duplicate values per checked column-group with occurrence count + which row numbers they're on,
+// so duplicates are visible on screen even if they fall outside the 50-row preview window.
+function computeDuplicateSummary(outRows){
+  return DUP_CHECK_GROUPS.map(g=>{
+    const groups = {};
+    outRows.forEach((row,i)=>{
+      const v = String(row[g.idxs[0]] ?? '').trim();
+      if(!v) return;
+      (groups[v] = groups[v] || []).push(i+1); // 1-based row numbers
+    });
+    const dups = Object.entries(groups)
+      .filter(([,rows])=>rows.length>1)
+      .sort((a,b)=>b[1].length-a[1].length)
+      .map(([value,rows])=>({ value, count:rows.length, rows }));
+    return { label:g.label, dups };
+  }).filter(col=>col.dups.length>0);
+}
+
+// Bee Number vs IMEI last-7-digit check (some devices derive the Bee Number from the IMEI's
+// last 7 digits — this is opt-in via checkbox since not every device follows that pattern).
+function last7(val){ return String(val ?? '').trim().slice(-7); }
+
+function computeMismatches(outRows, enabled){
+  if(!enabled) return outRows.map(()=>false);
+  return outRows.map(row=>{
+    const beeNum = String(row[PIDX.beeNumber] ?? '').trim();
+    const imei = String(row[PIDX.imei] ?? '').trim();
+    if(!beeNum || !imei) return false; // nothing to compare
+    return last7(beeNum) !== last7(imei);
+  });
+}
+
+let provFile = null;
+let provRows = null; // currently selected sheet's rows (array-of-arrays incl. header)
+
+function normHeader(h){ return String(h).toLowerCase().replace(/[^a-z0-9]/g,''); }
+function guessColumn(headers, candidates){
+  for(const cand of candidates){
+    const idx = headers.findIndex(h => normHeader(h) === normHeader(cand));
+    if(idx !== -1) return idx;
+  }
+  for(const cand of candidates){
+    const idx = headers.findIndex(h => normHeader(h).includes(normHeader(cand)));
+    if(idx !== -1) return idx;
+  }
+  return -1;
+}
+
+const provDropZone = document.getElementById('provDropZone');
+const provFileInput = document.getElementById('provFileInput');
+provDropZone.addEventListener('dragover', e=>{ e.preventDefault(); provDropZone.classList.add('drag-over'); });
+provDropZone.addEventListener('dragleave', ()=>provDropZone.classList.remove('drag-over'));
+provDropZone.addEventListener('drop', e=>{ e.preventDefault(); provDropZone.classList.remove('drag-over'); handleProvFile(e.dataTransfer.files[0]); });
+provFileInput.addEventListener('change', ()=>handleProvFile(provFileInput.files[0]));
+
+async function handleProvFile(file){
+  if(!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if(!['xlsx','xls','csv'].includes(ext)) return;
+  try{
+    const sheets = await readFile(file);
+    provFile = { name:file.name, sheets };
+    document.getElementById('provFileList').innerHTML = `
+      <div class="file-item">
+        <span class="file-icon">📊</span>
+        <span class="file-name" title="${escHtml(file.name)}">${escHtml(file.name)}</span>
+        <span class="file-meta">${Object.keys(sheets).length} sheet${Object.keys(sheets).length!==1?'s':''}</span>
+      </div>`;
+    const sheetSel = document.getElementById('provSheetSel');
+    sheetSel.innerHTML = Object.keys(sheets).map(s=>`<option value="${escHtml(s)}">${escHtml(s)}</option>`).join('');
+    sheetSel.style.display = 'block';
+    loadProvSheet();
+  }catch(e){ console.warn('production file read error', e); }
+}
+document.getElementById('provSheetSel').addEventListener('change', loadProvSheet);
+
+function loadProvSheet(){
+  const sel = document.getElementById('provSheetSel');
+  const sheetName = sel.value || Object.keys(provFile.sheets)[0];
+  provRows = provFile.sheets[sheetName];
+  renderProvMapping();
+}
+
+function provOpts(headers, selected, allowNone){
+  let html = '';
+  if(allowNone) html += `<option value="-1" ${selected===-1?'selected':''}>— none / not in this file —</option>`;
+  html += headers.map((h,i)=>`<option value="${i}" ${i===selected?'selected':''}>${escHtml(h.trim() ? h : '(unnamed column '+(i+1)+')')}</option>`).join('');
+  return html;
+}
+
+function renderProvMapping(){
+  const headers = (provRows[0]||[]).map(h=>String(h));
+  let guessSN = guessColumn(headers, ['SN','Serial Number','Serial No','Bee Name']);
+  if(guessSN === -1) guessSN = 0;
+  const guessFixedImei = guessColumn(headers, ['FIXED IMEI','Fixed Imei']);
+  const guessIccid = guessColumn(headers, ['ICCID']);
+  const guessMsisdn = guessColumn(headers, ['MSISDN(optional)','MSISDN']);
+
+  document.getElementById('provMappingArea').innerHTML = `
+    <div class="map-row"><span class="map-label">SN → Bee Name / Number</span><select class="select-input" id="provMapSN">${provOpts(headers, guessSN, false)}</select></div>
+    <div class="map-row"><span class="map-label">FIXED IMEI → IMEI</span><select class="select-input" id="provMapImei">${provOpts(headers, guessFixedImei, true)}</select></div>
+    <div class="map-row"><span class="map-label">ICCID</span><select class="select-input" id="provMapIccid">${provOpts(headers, guessIccid, true)}</select></div>
+    <div class="map-row"><span class="map-label">MSISDN (for floLIVE)</span><select class="select-input" id="provMapMsisdn">${provOpts(headers, guessMsisdn, true)}</select></div>
+    <p style="font-size:11px;color:var(--muted);margin-top:2px;line-height:1.5;">Mobile Number / Sim Number auto-calculate from ICCID when Carrier = Onomondo, and from MSISDN / ICCID when Carrier = floLIVE. For any other carrier they're left blank for manual entry.</p>
+  `;
+  updateProvConvertBtn();
+}
+
+function updateProvConvertBtn(){
+  document.getElementById('provConvertBtn').disabled = !provRows;
+}
+
+function setupAddCustom(selectId, inputId, btnId){
+  const add = () => {
+    const input = document.getElementById(inputId);
+    const val = input.value.trim();
+    if(!val) return;
+    const sel = document.getElementById(selectId);
+    if(![...sel.options].some(o=>o.value.toLowerCase()===val.toLowerCase())){
+      const opt = document.createElement('option');
+      opt.value = val; opt.textContent = val;
+      sel.appendChild(opt);
+    }
+    sel.value = val;
+    input.value = '';
+  };
+  document.getElementById(btnId).addEventListener('click', add);
+  document.getElementById(inputId).addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); add(); } });
+}
+setupAddCustom('provBatteryType','provBatteryCustom','provBatteryAddBtn');
+setupAddCustom('provCarrierType','provCarrierCustom','provCarrierAddBtn');
+
+document.getElementById('provConvertBtn').addEventListener('click', () => {
+  if(!provRows) return;
+  const idxSN = parseInt(document.getElementById('provMapSN').value);
+  const idxImei = parseInt(document.getElementById('provMapImei').value);
+  const idxIccid = parseInt(document.getElementById('provMapIccid').value);
+  const idxMsisdn = parseInt(document.getElementById('provMapMsisdn').value);
+  const deviceType = document.getElementById('provDeviceType').value.trim();
+  const batteryType = document.getElementById('provBatteryType').value;
+  const carrierType = document.getElementById('provCarrierType').value;
+  const financeLot = document.getElementById('provFinanceLot').value.trim();
+  const mismatchEnabled = document.getElementById('provCheckBeeImei').checked;
+
+  const outRows = [];
+  for(let r=1; r<provRows.length; r++){
+    const row = provRows[r];
+    if(!row) continue;
+    const sn = idxSN>=0 ? String(row[idxSN] ?? '').trim() : '';
+    const imei = idxImei>=0 ? String(row[idxImei] ?? '').trim() : '';
+    const iccid = idxIccid>=0 ? String(row[idxIccid] ?? '').trim() : '';
+    const msisdn = idxMsisdn>=0 ? String(row[idxMsisdn] ?? '').trim() : '';
+    if(!sn && !imei && !iccid) continue; // skip fully blank rows
+
+    let mobile = null, sim = null;
+    if(carrierType === 'Onomondo' && iccid){
+      const core = iccid.slice(10,19); // remove first 10 digits, take next 9
+      mobile = '+' + core;
+      sim = core;
+    } else if(carrierType === 'floLIVE'){
+      mobile = msisdn || null;
+      sim = iccid || null;
+    }
+
+    const out = new Array(PROVISION_HEADERS.length).fill(null);
+    out[PIDX.beeName] = sn || null;
+    out[PIDX.beeNumber] = sn || null;
+    out[PIDX.imei] = imei || null;
+    out[PIDX.mobile] = mobile;
+    out[PIDX.sim] = sim;
+    out[PIDX.carrier] = carrierType || null;
+    out[PIDX.deviceType] = deviceType || null;
+    out[PIDX.batteryType] = batteryType || null;
+    out[PIDX.financeLot] = financeLot || null;
+    out[PIDX.active] = sn ? 1 : null;
+    outRows.push(out);
+  }
+
+  renderProvPreview(outRows, computeDuplicates(outRows), computeMismatches(outRows, mismatchEnabled), mismatchEnabled);
+});
+
+function renderProvPreview(outRows, dupInfo, mismatchFlags, mismatchEnabled){
+  const panel = document.getElementById('provResultsPanel');
+  panel.style.display = 'flex';
+  panel.style.flexDirection = 'column';
+
+  if(outRows.length === 0){
+    panel.innerHTML = `
+      <div class="empty-state">
+        <div class="big-icon">⚠️</div>
+        <h3>No rows generated</h3>
+        <p>No data rows were found, or the SN / IMEI / ICCID column mapping didn't match any data. Check the column mapping in step 2 and try again.</p>
+      </div>`;
+    return;
+  }
+
+  const totalDupRows = dupInfo.filter(d=>d.note).length;
+  const totalMismatchRows = mismatchFlags.filter(Boolean).length;
+  const dupSummary = computeDuplicateSummary(outRows);
+  const previewCols = [PIDX.beeName, PIDX.beeNumber, PIDX.imei, PIDX.mobile, PIDX.sim, PIDX.carrier, PIDX.deviceType, PIDX.batteryType, PIDX.financeLot, PIDX.active];
+  const previewHeaders = previewCols.map(i=>PROVISION_HEADERS[i]).concat(['Issues']);
+  const previewRows = outRows.slice(0,50);
+  const previewDupInfo = dupInfo.slice(0,50);
+  const previewMismatch = mismatchFlags.slice(0,50);
+
+  function issueBadges(note, isMismatch){
+    let html = '';
+    if(note) html += `<span class="issue-badge dup">Dup: ${escHtml(note)}</span>`;
+    if(isMismatch) html += `<span class="issue-badge mismatch">Bee/IMEI mismatch</span>`;
+    return html || `<span class="dup-note none">—</span>`;
+  }
+
+  const dupSummarySectionHtml = dupSummary.length === 0
+    ? `<div class="prov-issues-heading ok">✓ No duplicate values found</div>`
+    : `
+      <div class="prov-issues-heading warn">⚠ Duplicate values in ${dupSummary.length} column${dupSummary.length>1?'s':''}</div>
+      ${dupSummary.map(col => `
+        <div class="dup-summary-col">
+          <div class="dup-summary-colname">${escHtml(col.label)}</div>
+          ${col.dups.map(d => `
+            <div class="dup-summary-row">
+              <span class="dup-summary-value">${escHtml(d.value)}</span>
+              <span class="dup-summary-count">${d.count}×</span>
+              <span class="dup-summary-rows">row${d.rows.length>1?'s':''} ${d.rows.slice(0,10).join(', ')}${d.rows.length>10?` +${d.rows.length-10} more`:''}</span>
+            </div>
+          `).join('')}
+        </div>
+      `).join('')}`;
+
+  let mismatchSectionHtml = '';
+  if(mismatchEnabled){
+    const mismatchRows = outRows
+      .map((row,i)=>({ row, i }))
+      .filter(({i})=>mismatchFlags[i]);
+    mismatchSectionHtml = mismatchRows.length === 0
+      ? `<div class="prov-issues-heading ok">✓ No Bee Number / IMEI mismatches found</div>`
+      : `
+        <div class="prov-issues-heading warn">⚠ ${mismatchRows.length} row(s) with Bee Number / IMEI mismatch</div>
+        ${mismatchRows.slice(0,200).map(({row,i}) => `
+          <div class="mismatch-row">
+            <span class="mm-row-num">row ${i+1}</span>
+            <span class="mm-vals">Bee Number <b>${escHtml(row[PIDX.beeNumber])}</b> (last7 ${escHtml(last7(row[PIDX.beeNumber]))}) ≠ IMEI <b>${escHtml(row[PIDX.imei])}</b> (last7 ${escHtml(last7(row[PIDX.imei]))})</span>
+          </div>
+        `).join('')}
+        ${mismatchRows.length>200 ? `<p style="font-size:11px;color:var(--muted);margin-top:8px;">+${mismatchRows.length-200} more not shown</p>` : ''}
+      `;
+  }
+
+  panel.innerHTML = `
+    <div class="results-header">
+      <h2>Preview <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:6px;">${outRows.length} row(s) generated${outRows.length>50?' · showing first 50':''}${totalDupRows ? ` · <span style="color:var(--red);">${totalDupRows} duplicate</span>` : ''}${mismatchEnabled && totalMismatchRows ? ` · <span style="color:var(--yellow);">${totalMismatchRows} mismatch</span>` : ''}</span></h2>
+      <button class="export-btn" id="provDownloadBtn">⬇ Download Provision Excel</button>
+    </div>
+    <div class="prov-results-split">
+      <div class="prov-preview-pane">
+        <table>
+          <thead><tr>${previewHeaders.map(h=>`<th>${escHtml(h)}</th>`).join('')}</tr></thead>
+          <tbody>${previewRows.map((r,ri)=>{
+            const dup = previewDupInfo[ri];
+            const isMm = previewMismatch[ri];
+            const cells = previewCols.map(ci=>{
+              const classes = [];
+              if(dup.dupIdxSet.has(ci)) classes.push('dup-cell');
+              if(isMm && (ci===PIDX.beeNumber || ci===PIDX.beeName || ci===PIDX.imei)) classes.push('mismatch-cell');
+              return `<td class="${classes.join(' ')}">${escHtml(r[ci])}</td>`;
+            }).join('');
+            return `<tr>${cells}<td>${issueBadges(dup.note, isMm)}</td></tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>
+      <div class="prov-issues-pane">
+        <div class="prov-issues-section">${dupSummarySectionHtml}</div>
+        ${mismatchEnabled ? `<div class="prov-issues-section">${mismatchSectionHtml}</div>` : ''}
+      </div>
+    </div>
+  `;
+
+  document.getElementById('provDownloadBtn').addEventListener('click', () => {
+    // IMPORTANT: the downloaded file must match the platform's expected schema exactly —
+    // 55 columns, exact header text, nothing extra, no styling that a strict importer might
+    // choke on. Duplicate/mismatch detail is shown only on screen in the Issues pane above;
+    // review it there before downloading.
+    const headers = PROVISION_HEADERS;
+    const wsData = [headers, ...outRows];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    ws['!cols'] = headers.map(()=>({ wch: 20 }));
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'options');
+    XLSX.writeFile(wb, `provision-excel-${Date.now()}.xlsx`);
+  });
+}
 </script>
 </body>
 </html>
